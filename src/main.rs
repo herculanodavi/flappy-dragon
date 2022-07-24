@@ -32,12 +32,18 @@ impl Obstacle {
 
         // Draw the top half of the obstacle
         for y in 0..self.gap_y - half_size {
-            ctx.set(screen_x, y, RED, BLACK, to_cp437('|'));
+            for x in 0..3 {
+                ctx.set(screen_x - x, y, RED, BLACK, to_cp437('■'));
+                ctx.set(screen_x + x, y, RED, BLACK, to_cp437('■'));
+            }
         }
 
         // Draw the bottom half of the obstacle
         for y in self.gap_y + half_size..SCREEN_HEIGHT {
-            ctx.set(screen_x, y, RED, BLACK, to_cp437('|'));
+            for x in 0..3 {
+                ctx.set(screen_x - x, y, RED, BLACK, to_cp437('■'));
+                ctx.set(screen_x + x, y, RED, BLACK, to_cp437('■'));
+            }
         }
     }
 
@@ -67,7 +73,12 @@ impl Player {
     }
 
     fn render(&mut self, ctx: &mut BTerm) {
-        ctx.set(4, self.y as i32, YELLOW, BLACK, to_cp437('@'))
+        if self.velocity > 0.0 {
+            ctx.set(4, self.y as i32, YELLOW, BLACK, to_cp437('▲'))
+        } else {
+            ctx.set(4, self.y as i32, YELLOW, BLACK, to_cp437('▼'))
+        }
+        
     }
 
     fn gravity_and_move(&mut self) {
@@ -89,7 +100,7 @@ impl Player {
 struct State {
     player: Player,
     frame_time: f32,
-    obstacle: Obstacle,
+    obstacles: [Obstacle; 2],
     mode: GameMode,
     score: i32,
 }
@@ -99,14 +110,17 @@ impl State {
         State {
             player: Player::new(5, 25),
             frame_time: 0.0,
-            obstacle: Obstacle::new(SCREEN_WIDTH, 0),
+            obstacles: [
+                Obstacle::new(SCREEN_WIDTH / 2, 0),
+                Obstacle::new(SCREEN_WIDTH, 0),
+            ],
             mode: GameMode::Menu,
             score: 0,
         }
     }
 
     fn play(&mut self, ctx: &mut BTerm) {
-        ctx.cls_bg(NAVY);
+        ctx.cls_bg(SKY_BLUE);
 
         self.frame_time += ctx.frame_time_ms;
         if self.frame_time > FRAME_DURATION {
@@ -123,14 +137,20 @@ impl State {
         ctx.print(0, 0, "Press Space to flap.");
         ctx.print(0, 1, &format!("Score: {}", self.score));
 
-        self.obstacle.render(ctx, self.player.x);
+        for obstacle in &mut self.obstacles {
+            obstacle.render(ctx, self.player.x);
 
-        if self.player.x > self.obstacle.x {
-            self.score += 1;
-            self.obstacle = Obstacle::new(self.player.x + SCREEN_WIDTH, self.score);
+            if self.player.x > obstacle.x {
+                self.score += 1;
+                *obstacle = Obstacle::new(self.player.x + SCREEN_WIDTH, self.score);
+            } else {
+                if obstacle.hit_obstacle(&self.player) {
+                    self.mode = GameMode::End;
+                }
+            }
         }
 
-        if self.player.y as i32 > SCREEN_HEIGHT || self.obstacle.hit_obstacle(&self.player) {
+        if self.player.y as i32 > SCREEN_HEIGHT {
             self.mode = GameMode::End;
         }
     }
@@ -138,7 +158,10 @@ impl State {
     fn restart(&mut self) {
         self.player = Player::new(5, 25);
         self.frame_time = 0.0;
-        self.obstacle = Obstacle::new(SCREEN_WIDTH, 0);
+        self.obstacles = [
+            Obstacle::new(SCREEN_WIDTH / 2, 0),
+            Obstacle::new(SCREEN_WIDTH, 0),
+        ];
         self.mode = GameMode::Playing;
         self.score = 0;
     }
